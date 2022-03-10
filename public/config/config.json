@@ -1,0 +1,19 @@
+{
+  "CONTRACT_ADDRESS": "0x0cAE9c086399B6FDcda84AD9B1072933a87F38f9",
+  "SCAN_LINK": "https://rinkeby.etherscan.io/token/0x0cAE9c086399B6FDcda84AD9B1072933a87F38f9",
+  "NETWORK": {
+    "NAME": "Rinkeby Test Network",
+    "SYMBOL": "ETH",
+    "ID": 4
+  },
+  "NFT_NAME": "Meta Jewelz",
+  "SYMBOL": "MJWLZ",
+  "MAX_SUPPLY": 50,
+  "WEI_COST": 10000000000000,
+  "DISPLAY_COST": 0.00001,
+  "GAS_LIMIT": 285000,
+  "MARKETPLACE": "Opeansea",
+  "MARKETPLACE_LINK": "https://testnets.opensea.io/collection/picture-day-v2",
+  "SHOW_BACKGROUND": true,
+  "MAX_MINT_AMOUNT" : 10
+}
