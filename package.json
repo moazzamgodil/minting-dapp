@@ -5,6 +5,7 @@
   "private": true,
   "dependencies": {
     "@metamask/detect-provider": "^1.2.0",
+    "@walletconnect/web3-provider": "^1.7.4",
     "react": "^17.0.2",
     "react-dom": "^17.0.2",
     "react-redux": "^7.2.4",
@@ -14,7 +15,7 @@
     "serve": "^13.0.2",
     "styled-components": "^5.3.0",
     "web-vitals": "^1.0.1",
-    "web3": "^1.5.1",
+    "web3": "^1.7.1",
     "web3-eth-contract": "^1.5.2"
   },
   "author": "Cryptronity",

@@ -21,7 +21,7 @@ const fetchDataFailed = (payload) => {
   };
 };
 
-export const fetchData = () => {
+export const fetchData = (acc) => {
   return async (dispatch) => {
     dispatch(fetchDataRequest());
     try {
@@ -45,12 +45,43 @@ export const fetchData = () => {
         .blockchain.smartContract.methods.maxMintAmount()
         .call();
 
+      let balanceOf = 0;
+      let nfts = [];
+      if(acc) {
+        balanceOf = await store
+        .getState()
+        .blockchain.smartContract.methods.balanceOf(acc)
+        .call();
+        
+        let walletOfOwner = await store
+        .getState()
+        .blockchain.smartContract.methods.walletOfOwner(acc)
+        .call();
+
+        var i = 0;
+        while(i<Number(balanceOf)) {
+
+          let tokenURI = await store
+          .getState()
+          .blockchain.smartContract.methods.tokenURI(walletOfOwner[i])
+          .call();
+          if(tokenURI) {
+            let tokenURIJson = tokenURI.substring(7, tokenURI.length);
+            nfts.push(tokenURIJson);
+          }
+          i++;
+        }
+
+      }
+
       dispatch(
         fetchDataSuccess({
           totalSupply,
           cost,
           maxSupply,
           maxMintAmount,
+          balanceOf,
+          nfts,
         })
       );
     } catch (err) {

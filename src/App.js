@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { connect, getTotalSupply, getErrorMessage } from "./redux/blockchain/blockchainActions";
+import { connect, getTotalSupply, getErrorMessage, getAccountData } from "./redux/blockchain/blockchainActions";
 import { fetchData } from "./redux/data/dataActions";
 import * as s from "./styles/globalStyles";
 import styled from "styled-components";
 
-const truncate = (input, len) =>
-  input.length > len ? `${input.substring(0, len)}...` : input;
+const truncate = (input, len, small = false) =>
+  input.length > len ? `${input.substring(0, len)}...${small ? input.substring(input.length - len, input.length) : ''}` : input;
 
 export const StyledButton = styled.button`
   display: flex;
@@ -117,6 +117,14 @@ export const StyledImg = styled.img`
   transition: width 0.5s;
 `;
 
+export const NftImg = styled.img`
+  max-width: calc((100vw / 4) - 50px);
+  border: 2px solid #27a6dc;
+  border-radius: 15px;
+  background: #ffffff;
+  margin: 0 10px 20px;
+`;
+
 export const StyledLink = styled.a`
   color: var(--secondary);
   text-decoration: none;
@@ -190,15 +198,13 @@ export const StyledBlueText = styled.p`
 
 
 function App() {
-  window.onload = () => {
-    dispatch(getTotalSupply());
-  }
   const dispatch = useDispatch();
   const blockchain = useSelector((state) => state.blockchain);
   const data = useSelector((state) => state.data);
   const [claimingNft, setClaimingNft] = useState(false);
   const [feedback, setFeedback] = useState(`Click buy to mint your NFT.`);
   const [mintAmount, setMintAmount] = useState(1);
+  const [nftObj, setnftObj] = useState([]);
   const [CONFIG, SET_CONFIG] = useState({
     CONTRACT_ADDRESS: "",
     SCAN_LINK: "",
@@ -218,6 +224,10 @@ function App() {
     SHOW_BACKGROUND: true,
     MAX_MINT_AMOUNT: 10
   });
+
+  window.onload = () => {
+    dispatch(getTotalSupply());
+  }
 
   const claimNFTs = () => {
     let cost = CONFIG.WEI_COST;
@@ -294,12 +304,36 @@ function App() {
     getData();
   }, [blockchain.account]);
 
+  useEffect(() => {
+    getNFTs();
+  }, [data.nfts]);
+
+  const getNFTs = async () => {
+    let nftObj = [];
+    const nfts = await data.nfts;
+    if(nfts.length > 0) {
+      let i;
+      for(i=0; i<nfts.length; i++) {
+
+        const nftResponse = await fetch(`https://mygateway.mypinata.cloud/ipfs/${nfts[i]}`, {
+          headers: {
+            Accept: "application/json",
+          },
+        });
+        const nft = await nftResponse.json();
+        const nftImg = `https://mygateway.mypinata.cloud/ipfs/${nft.image.substring(7, nft.image.length)}`;
+        nftObj[i] = nftImg;
+      }
+    }
+    setnftObj(nftObj);
+  }
+
   return (
     <s.Screen>
       <s.Container
         flex={1}
         ai={"center"}
-        style={{ backgroundColor: "var(--primary)", minHeight: "100vh" }}
+        style={{ backgroundColor: "var(--primary)", /*minHeight: "100vh"*/ }}
         image={CONFIG.SHOW_BACKGROUND ? "/config/images/bg.png" : null}
       >
         <StyledTopDiv>
@@ -488,9 +522,27 @@ function App() {
         </ResponsiveWrapper>
       </s.Container>
       <s.Container style={{ padding: "60px", justifyContent: "center", alignItems: "center" }}>
-        <StyledBlueText>12 Characters | 5000 NFTs | 0.1 ETH</StyledBlueText>
-        <StyledWhiteText>Minting Now</StyledWhiteText>
-        <StyledGoldenText>Regular website content will be back after mint!</StyledGoldenText>
+          {data.loading ? (<StyledGoldenText>Loading</StyledGoldenText>) : (
+            data.balanceOf > 0 ? (
+              nftObj.length > 0 ? 
+              <>
+                <StyledBlueText>NFTs against your wallet ({truncate(blockchain.account, 5, true)})</StyledBlueText>
+                <br/>
+                <div style={{display: "flex", flexWrap: "wrap"}}>
+                  {
+                    nftObj.map((nft, i) => (
+                      <NftImg key={i} src={nft}/>
+                    ))
+                  }
+                </div>
+              </>
+               : (<StyledGoldenText>Loading your NFTs</StyledGoldenText>)
+            ) : (<StyledBlueText>Connect your account to see your NFTs</StyledBlueText>)
+          )
+          }
+
+        {/* <StyledWhiteText>Minting Now</StyledWhiteText>
+        <StyledGoldenText>Regular website content will be back after mint!</StyledGoldenText> */}
       </s.Container>
     </s.Screen>
   );

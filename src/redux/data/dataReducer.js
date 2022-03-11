@@ -2,6 +2,10 @@ const initialState = {
   loading: false,
   totalSupply: 0,
   cost: 0,
+  maxSupply: 0,
+  maxMintAmount: 0,
+  balanceOf: 0,
+  nfts: [],
   error: false,
   errorMsg: "",
 };
@@ -23,6 +27,8 @@ const dataReducer = (state = initialState, action) => {
         cost: action.payload.cost,
         maxSupply: action.payload.maxSupply,
         maxMintAmount: action.payload.maxMintAmount,
+        balanceOf: action.payload.balanceOf,
+        nfts: action.payload.nfts,
         error: false,
         errorMsg: "",
       };
