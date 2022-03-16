@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { connect, getTotalSupply, getErrorMessage, getAccountData } from "./redux/blockchain/blockchainActions";
+import { connect, getTotalSupply, getErrorMessage, updateAccount } from "./redux/blockchain/blockchainActions";
 import { fetchData } from "./redux/data/dataActions";
 import * as s from "./styles/globalStyles";
 import styled from "styled-components";
@@ -204,7 +204,8 @@ function App() {
   const [claimingNft, setClaimingNft] = useState(false);
   const [feedback, setFeedback] = useState(`Click buy to mint your NFT.`);
   const [mintAmount, setMintAmount] = useState(1);
-  const [nftObj, setnftObj] = useState([]);
+  const [loggedIn, setloggedIn] = useState(false);
+  const [nftObj, setnftObj] = useState([]); 
   const [CONFIG, SET_CONFIG] = useState({
     CONTRACT_ADDRESS: "",
     SCAN_LINK: "",
@@ -263,6 +264,33 @@ function App() {
       });
   };
 
+  const disconnectWallet = async () => {
+    if(blockchain.provider && blockchain.provider.isWalletConnect) {
+      await blockchain.provider.disconnect();
+    } else if(blockchain.provider && blockchain.provider.isCoinbaseWallet) {
+      await blockchain.provider.close();
+    } else {
+      blockchain.provider = '';
+      setloggedIn(false);
+      return (dispatch) => {
+        dispatch(updateAccount(""));
+      }
+    }
+    blockchain.provider.on("disconnect", () => {
+      blockchain.provider = '';
+      setloggedIn(false);
+      return (dispatch) => {
+        dispatch(updateAccount(""));
+      }
+    });
+  }
+
+  if(blockchain.provider) {
+    blockchain.provider.on("chainChanged", () => {
+      window.location.reload();
+    });
+  }
+
   const decrementMintAmount = () => {
     let newMintAmount = mintAmount - 1;
     if (newMintAmount < 1) {
@@ -281,6 +309,7 @@ function App() {
 
   const getData = () => {
     if (blockchain.account !== "" && blockchain.smartContract !== null) {
+      setloggedIn(true);
       dispatch(fetchData(blockchain.account));
     }
   };
@@ -401,11 +430,11 @@ function App() {
               </>
             ) : (
               <>
-                {blockchain.account === "" ||
+                {!loggedIn ||
                 blockchain.smartContract === null ? (
                   <s.Container ai={"center"} jc={"center"}>
                     <s.SpacerSmall />
-                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', width: "100%", maxWidth: "400px" }}>
                     <StyledButton
                       onClick={(e) => {
                         e.preventDefault();
@@ -413,19 +442,30 @@ function App() {
                         getData();
                       }}
                     >
-                      <img style={{width: 40, marginRight: 10}} src={"/config/images/metamask.png"} />
-                      CONNECT METAMASK
+                      METAMASK
+                      <img style={{width: 40, marginLeft: "auto"}} src={"/config/images/metamask.png"} />
                     </StyledButton>
                     <StyledButton
-                    style={{ marginTop: '10px'}}
+                      style={{ marginTop: '10px'}}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        dispatch(connect('walletconnect'));
+                        getData();
+                      }}
+                    >
+                      WALLETCONNECT
+                      <img style={{width: 40, marginLeft: "auto"}} src={"/config/images/walletconnect.png"} />
+                    </StyledButton>
+                    <StyledButton
+                      style={{ marginTop: '10px'}}
                       onClick={(e) => {
                         e.preventDefault();
                         dispatch(connect('coinbase'));
                         getData();
                       }}
                     >
-                      <img style={{width: 40, marginRight: 10}} src={"/config/images/coinbase.png"} />
-                      CONNECT COINBASE
+                      COINBASE
+                      <img style={{width: 40, marginLeft: "auto"}} src={"/config/images/coinbase.png"} />
                     </StyledButton>
                     </div>
                     {blockchain.errorMsg !== "" ? (
@@ -442,7 +482,7 @@ function App() {
                       </>
                     ) : null}
                   </s.Container>
-                ) : (
+                ) : !data.loading ? (
                   <>
                     <s.TextDescription
                       style={{
@@ -500,8 +540,31 @@ function App() {
                         {claimingNft ? "MINTING" : "BUY"}
                       </StyledButton>
                     </s.Container>
+                    <s.SpacerMedium />
+                    <s.Container ai={"center"} jc={"center"} fd={"row"}>
+                      <StyledButton
+                      style={{fontSize: "18px"}}
+                        disabled={claimingNft ? 1 : 0}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          disconnectWallet();
+                        }}
+                      >
+                        Disconnect Wallet
+                      </StyledButton>
+                    </s.Container>
                   </>
-                )}
+                ) : <s.TextDescription
+                style={{
+                  textAlign: "center",
+                  color: "var(--primary-text)",
+                  wordBreak: "break-word",
+                  width: "50%",
+                  fontSize: "24px"
+                }}
+              >
+                Connecting to Wallet
+              </s.TextDescription>}
                 <s.SpacerLarge />
                 {/* <s.SpacerSmall /> */}
                 <s.TextTitleMintPrice
@@ -522,24 +585,26 @@ function App() {
         </ResponsiveWrapper>
       </s.Container>
       <s.Container style={{ padding: "60px", justifyContent: "center", alignItems: "center" }}>
-          {data.loading ? (<StyledGoldenText>Loading</StyledGoldenText>) : (
-            data.balanceOf > 0 ? (
-              nftObj.length > 0 ? 
-              <>
-                <StyledBlueText>NFTs against your wallet ({truncate(blockchain.account, 5, true)})</StyledBlueText>
-                <br/>
-                <div style={{display: "flex", flexWrap: "wrap"}}>
-                  {
-                    nftObj.map((nft, i) => (
-                      <NftImg key={i} src={nft}/>
-                    ))
-                  }
-                </div>
-              </>
-               : (<StyledGoldenText>Loading your NFTs</StyledGoldenText>)
+          {data.loading && loggedIn ? (<StyledGoldenText>Loading your NFTs</StyledGoldenText>)
+          : (
+            loggedIn ? (
+              data.balanceOf > 0 ? (
+                nftObj.length > 0 ? (
+                  <>
+                    <StyledBlueText>NFTs against your wallet ({truncate(blockchain.account, 5, true)})</StyledBlueText>
+                    <br/>
+                    <div style={{display: "flex", flexWrap: "wrap"}}>
+                      {
+                        nftObj.map((nft, i) => (
+                          <NftImg key={i} src={nft}/>
+                        ))
+                      }
+                    </div>
+                  </>
+                ) : (<StyledGoldenText>Loading your NFTs</StyledGoldenText>)
+              ) : (<StyledBlueText>No NFT found</StyledBlueText>)
             ) : (<StyledBlueText>Connect your account to see your NFTs</StyledBlueText>)
-          )
-          }
+          )}
 
         {/* <StyledWhiteText>Minting Now</StyledWhiteText>
         <StyledGoldenText>Regular website content will be back after mint!</StyledGoldenText> */}

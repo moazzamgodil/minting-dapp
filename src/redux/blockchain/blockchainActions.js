@@ -1,6 +1,11 @@
 // constants
 import Web3EthContract from "web3-eth-contract";
 import Web3 from "web3";
+// Wallet Connect
+import WalletConnectProvider from "@walletconnect/web3-provider";
+import CoinbaseWalletSDK from '@coinbase/wallet-sdk';
+import { INFURA_ID, INFURA_URL } from "../../infura";
+
 // log
 import { fetchData } from "../data/dataActions";
 
@@ -39,7 +44,6 @@ export const connect = (walletName = '') => {
   if (isMobileDevice()) {
     const dappUrl = window.location.host;
     const metamaskAppDeepLink = "https://metamask.app.link/dapp/" + dappUrl;
-    const coinbaseLink = "https://go.cb-w.com/";
     const { ethereum } = window;
     if(!ethereum) {
       if(walletName === 'metamask' || walletName == '') {
@@ -47,11 +51,6 @@ export const connect = (walletName = '') => {
           window.location = metamaskAppDeepLink
         );
       } 
-      if(walletName === 'coinbase') {
-        return (
-          window.location = coinbaseLink
-        );
-      }
     }
   }
   return async (dispatch) => {
@@ -70,79 +69,108 @@ export const connect = (walletName = '') => {
       },
     });
     const CONFIG = await configResponse.json();
+
     const { ethereum } = window;
-    const metamaskIsInstalled = ethereum && ethereum.isMetaMask;
-    let ethProviders = ethereum;
+
+    //  Create WalletConnect Provider
+    const WCProvider = new WalletConnectProvider({
+      infuraId: INFURA_ID,
+    });
+
+    // Initialize Coinbase Wallet SDK
+    const coinbaseWallet = new CoinbaseWalletSDK({
+      appName: CONFIG.NFT_NAME,
+      appLogoUrl: "/config/images/logo.png",
+      darkMode: false
+    })
+
+    // Initialize a Web3 Provider object
+    const CBProvider = coinbaseWallet.makeWeb3Provider(INFURA_URL, CONFIG.NETWORK.ID)
+
+    let metamaskIsInstalled = ethereum && ethereum.isMetaMask;
+    let coinbaseIsInstalled = CBProvider && CBProvider.isCoinbaseWallet;
+    let providerMetamask;
     if(ethereum) {
-      ethProviders = window.ethereum.providers != undefined ? window.ethereum.providers : ethereum;
-    } else {
+      if(ethereum.providers != undefined) {
+        providerMetamask = ethereum.providers.find((provider) => provider.isMetaMask);
+      } else {
+        providerMetamask = ethereum;
+      }
+    } else if(!isMobileDevice) {
       dispatch(connectFailed("No wallet found."));
       return;
     }
-    const coinbaseIsInstalled = metamaskIsInstalled ? ethProviders ==  ethereum ? (ethereum && ethereum.isCoinbaseWallet) : (ethProviders.find((provider) => provider).isCoinbaseWallet) : (ethereum && ethereum.isCoinbaseWallet);
+
     if (metamaskIsInstalled || coinbaseIsInstalled) {
-      // Web3EthContract.setProvider(ethereum);
-      let web3 = new Web3(ethereum);
       let providerETH = '';
       if( walletName === 'metamask' || walletName == '' ) {
         if(metamaskIsInstalled) {
-          providerETH = ethProviders.isMetaMask == true ? ethereum : ethProviders.find((provider) => provider.isMetaMask);
+          providerETH = providerMetamask;
         } else {
           dispatch(connectFailed("Install Metamask."));
           return;
         }
       } else if( walletName === 'coinbase' ) {
-        if(metamaskIsInstalled && coinbaseIsInstalled) {
-          providerETH = window.ethereum.providers.find((provider) => provider.isCoinbaseWallet);
-        } else if(coinbaseIsInstalled) {
-          providerETH = ethereum;
+        if(coinbaseIsInstalled) {
+          providerETH = CBProvider;
         } else {
           dispatch(connectFailed("Install Coinbase Wallet."));
           return;
         }
+      } else if( walletName === 'walletconnect' ) {
+        if(WCProvider) {
+          await WCProvider.enable();
+          providerETH = WCProvider;
+        } else {
+          dispatch(connectFailed("WalletConnect not working"));
+          return;
+        }
       }
+      let web3 = new Web3(providerETH);
       Web3EthContract.setProvider(providerETH);
       try {
         const accounts = await providerETH.request({ 
-          method: 'eth_requestAccounts'
+          method: providerETH.isWalletConnect ? 'eth_accounts' : 'eth_requestAccounts'
         });
-        const networkId = await ethereum.request({
+
+        const networkId = await providerETH.request({
           method: "net_version",
         });
-        if (networkId == CONFIG.NETWORK.ID) {
-          const SmartContractObj = new Web3EthContract(
-            abi,
-            CONFIG.CONTRACT_ADDRESS
-          );
-          dispatch(
-            connectSuccess({
-              account: accounts[0],
-              smartContract: SmartContractObj,
-              web3: web3,
-            })
-          );
-          // Add listeners start
-          ethereum.on("accountsChanged", (accounts) => {
-            dispatch(updateAccount(accounts[0]));
-          });
-          ethereum.on("chainChanged", () => {
-            window.location.reload();
-          });
-          // Add listeners end
-        } else {
-          dispatch(connectFailed(`Change network to ${CONFIG.NETWORK.NAME}.`));
+        if (networkId != CONFIG.NETWORK.ID) {
           try {
-            await ethereum.request({
+            await providerETH.request({
               method: 'wallet_switchEthereumChain',
               params: [{ chainId: '0x4' }],
             });
-          } catch (switchError) {
+          } catch(ee) {
             dispatch(connectFailed(`Change network to ${CONFIG.NETWORK.NAME}.`));
+            return;
           }
         }
+        const SmartContractObj = new Web3EthContract(
+          abi,
+          CONFIG.CONTRACT_ADDRESS
+        );
+        dispatch(
+          connectSuccess({
+            account: accounts[0],
+            smartContract: SmartContractObj,
+            web3: web3,
+            provider: providerETH,
+          })
+        );
+        // Add listeners start
+        providerETH.on("accountsChanged", (accounts) => {
+          dispatch(updateAccount(accounts[0]));
+        });
+        // Add listeners end
+        
       } catch (err) {
-        console.log(err);
-        dispatch(connectFailed("Something went wrong."));
+        if(typeof(err.message) == "string") {
+          dispatch(connectFailed(err.message));
+        } else {
+          dispatch(connectFailed("Something went wrong."));
+        }
       }
     } else {
       if( walletName === 'metamask' ) {
@@ -209,7 +237,7 @@ export const getTotalSupply = () => {
           dispatch(connectFailed(`Change network to ${CONFIG.NETWORK.NAME}.`));
         }
       }
-    } else {
+    } else if(!isMobileDevice) {
       dispatch(connectFailed("Install Metamask OR Coinbase Wallet."));
     }
   }
