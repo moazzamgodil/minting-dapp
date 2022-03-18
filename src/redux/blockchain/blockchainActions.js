@@ -233,7 +233,11 @@ export const getTotalSupply = () => {
             method: 'wallet_switchEthereumChain',
             params: [{ chainId: '0x4' }],
           });
+          ethereum.on("chainChanged", () => {
+            window.location.reload();
+          });
         } catch (switchError) {
+          console.log(switchError)
           dispatch(connectFailed(`Change network to ${CONFIG.NETWORK.NAME}.`));
         }
       }

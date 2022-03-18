@@ -4,6 +4,7 @@ import { connect, getTotalSupply, getErrorMessage, updateAccount } from "./redux
 import { fetchData } from "./redux/data/dataActions";
 import * as s from "./styles/globalStyles";
 import styled from "styled-components";
+import Web3 from "web3";
 
 const truncate = (input, len, small = false) =>
   input.length > len ? `${input.substring(0, len)}...${small ? input.substring(input.length - len, input.length) : ''}` : input;
@@ -240,28 +241,38 @@ function App() {
     console.log("Minting in progress...");
     setFeedback(`Minting your ${CONFIG.NFT_NAME}...`);
     setClaimingNft(true);
-    blockchain.smartContract.methods
-      .mint(mintAmount)
-      .send({
-        gasLimit: String(totalGasLimit),
-        to: CONFIG.CONTRACT_ADDRESS,
-        from: blockchain.account,
-        value: totalCostWei,
-      })
-      .once("error", async (err) => {
-        
-        var errMsg = await getErrorMessage(err);
-        setFeedback(errMsg);
-        setClaimingNft(false);
-      })
-      .then((receipt) => {
-        console.log(receipt);
-        setFeedback(
-          `WOW, the ${CONFIG.NFT_NAME} is yours! go visit Opensea.io to view it.`
-        );
-        setClaimingNft(false);
-        dispatch(fetchData(blockchain.account));
+    try {
+      let web3 = new Web3(window.ethereum);
+      web3.eth.estimateGas({ gas: totalGasLimit }).then((res) => {
+        blockchain.smartContract.methods
+          .mint(mintAmount)
+          .send({
+            gasLimit: String(res),
+            // gasLimit: String(totalGasLimit),
+            to: CONFIG.CONTRACT_ADDRESS,
+            from: blockchain.account,
+            value: totalCostWei,
+          })
+          .once("error", async (err) => {
+
+            var errMsg = await getErrorMessage(err);
+            setFeedback(errMsg);
+            setClaimingNft(false);
+          })
+          .then((receipt) => {
+            console.log(receipt);
+            setFeedback(
+              `Let's Go! The ${CONFIG.NFT_NAME} is yours, now view it at Opensea.io.`
+            );
+            setClaimingNft(false);
+            dispatch(fetchData(blockchain.account));
+          });
+        console.log(res)
       });
+
+    } catch (error) {
+      console.log(error)
+    }
   };
 
   const disconnectWallet = async () => {
@@ -285,10 +296,19 @@ function App() {
     });
   }
 
-  if(blockchain.provider) {
-    blockchain.provider.on("chainChanged", () => {
-      window.location.reload();
+  const switchChain = async () => {
+    const networkId = await blockchain.provider.request({
+      method: "net_version",
     });
+    blockchain.provider.on("chainChanged", () => {
+      if (networkId != CONFIG.NETWORK.ID) {
+        window.location.reload();
+      }
+    });
+  }
+
+  if(blockchain.provider) {
+    switchChain();
   }
 
   const decrementMintAmount = () => {
